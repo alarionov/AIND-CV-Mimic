@@ -21,6 +21,13 @@ detector.detectAllAppearance();
 
 // Unicode values for all emojis Affectiva can detect
 var emojis = [ 128528, 9786, 128515, 128524, 128527, 128521, 128535, 128539, 128540, 128542, 128545, 128563, 128561 ];
+let target_emoji_code;
+let emojis_total = 0;
+let emojis_correct = 0;
+let start_ts = 0;
+
+const max_emojis = 20;
+const try_time = 25;
 
 // Update target emoji being displayed by supplying a unicode value
 function setTargetEmoji(code) {
@@ -53,6 +60,7 @@ function onStart() {
     detector.start();  // start detector
   }
   log('#logs', "Start button pressed");
+  nextTargetEmoji();
 }
 
 // Stop button
@@ -75,6 +83,10 @@ function onReset() {
 
   // TODO(optional): You can restart the game as well
   // <your code here>
+  emojis_total = 0;
+  emojis_correct = 0;
+  setScore(0, 0);
+  nextTargetEmoji();
 };
 
 // Add a callback to notify when camera access is allowed
@@ -109,31 +121,51 @@ detector.addEventListener("onInitializeSuccess", function() {
 // NOTE: The faces object contains a list of the faces detected in the image,
 //   probabilities for different expressions, emotions and appearance metrics
 detector.addEventListener("onImageResultsSuccess", function(faces, image, timestamp) {
-  var canvas = $('#face_video_canvas')[0];
-  if (!canvas)
-    return;
+  if (emojis_total < max_emojis) {
+    if (timestamp - start_ts > try_time) {
+      start_ts = timestamp;
+      return nextTargetEmoji();
+    }
 
-  // Report how many faces were found
-  $('#results').html("");
-  log('#results', "Timestamp: " + timestamp.toFixed(2));
-  log('#results', "Number of faces found: " + faces.length);
-  if (faces.length > 0) {
-    // Report desired metrics
-    log('#results', "Appearance: " + JSON.stringify(faces[0].appearance));
-    log('#results', "Emotions: " + JSON.stringify(faces[0].emotions, function(key, val) {
-      return val.toFixed ? Number(val.toFixed(0)) : val;
-    }));
-    log('#results', "Expressions: " + JSON.stringify(faces[0].expressions, function(key, val) {
-      return val.toFixed ? Number(val.toFixed(0)) : val;
-    }));
-    log('#results', "Emoji: " + faces[0].emojis.dominantEmoji);
+    var canvas = $('#face_video_canvas')[0];
 
-    // Call functions to draw feature points and dominant emoji (for the first face only)
-    drawFeaturePoints(canvas, image, faces[0]);
-    drawEmoji(canvas, image, faces[0]);
+    if (!canvas) return;
 
-    // TODO: Call your function to run the game (define it first!)
-    // <your code here>
+    // Report how many faces were found
+    $('#results').html("");
+    log('#results', "Timestamp: " + timestamp.toFixed(2));
+    log('#results', "Number of faces found: " + faces.length);
+    if (faces.length > 0) {
+      // Report desired metrics
+      log('#results', "Appearance: " + JSON.stringify(faces[0].appearance));
+      log('#results', "Emotions: " + JSON.stringify(faces[0].emotions, function(key, val) {
+        return val.toFixed ? Number(val.toFixed(0)) : val;
+      }));
+      log('#results', "Expressions: " + JSON.stringify(faces[0].expressions, function(key, val) {
+        return val.toFixed ? Number(val.toFixed(0)) : val;
+      }));
+      log('#results', "Emoji: " + faces[0].emojis.dominantEmoji);
+
+      // Call functions to draw feature points and dominant emoji (for the first face only)
+      drawFeaturePoints(canvas, image, faces[0]);
+      drawEmoji(canvas, image, faces[0]);
+
+      // TODO: Call your function to run the game (define it first!)
+      // <your code here>
+      const current_code = toUnicode(faces[0].emojis.dominantEmoji);
+
+      if (current_code == target_emoji_code) {
+        emojis_correct += 1;
+        start_ts = timestamp;
+        return nextTargetEmoji();
+      }
+
+      setScore(emojis_correct, emojis_total);
+    }
+  }
+  else {
+    setScore(emojis_correct, emojis_total);
+    onStop();
   }
 });
 
@@ -148,7 +180,7 @@ function drawFeaturePoints(canvas, img, face) {
   // TODO: Set the stroke and/or fill style you want for each feature point marker
   // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D#Fill_and_stroke_styles
   // <your code here>
-  
+  ctx.strokeStyle = "#000000";
   // Loop over each feature point in the face
   for (var id in face.featurePoints) {
     var featurePoint = face.featurePoints[id];
@@ -156,6 +188,9 @@ function drawFeaturePoints(canvas, img, face) {
     // TODO: Draw feature point, e.g. as a circle using ctx.arc()
     // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc
     // <your code here>
+    ctx.beginPath();
+    ctx.arc(featurePoint.x, featurePoint.y, 2, 0, 2 * Math.PI);
+    ctx.stroke();
   }
 }
 
@@ -166,11 +201,14 @@ function drawEmoji(canvas, img, face) {
 
   // TODO: Set the font and style you want for the emoji
   // <your code here>
-  
+  ctx.strokeStyle = "#ffff00";
+  ctx.font = '50px serif';
+
   // TODO: Draw it using ctx.strokeText() or fillText()
   // See: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillText
   // TIP: Pick a particular feature point as an anchor so that the emoji sticks to your face
   // <your code here>
+  ctx.fillText(face.emojis.dominantEmoji, face.featurePoints[5].x - 100, face.featurePoints[5].y);
 }
 
 // TODO: Define any variables and functions to implement the Mimic Me! game mechanics
@@ -187,3 +225,13 @@ function drawEmoji(canvas, img, face) {
 // - Define a game reset function (same as init?), and call it from the onReset() function above
 
 // <your code here>
+
+function randomEmojiCode() {
+  return emojis[Math.floor(Math.random() * emojis.length)];
+}
+
+function nextTargetEmoji() {
+  emojis_total += 1;
+  target_emoji_code = randomEmojiCode();
+  setTargetEmoji(target_emoji_code);
+}
